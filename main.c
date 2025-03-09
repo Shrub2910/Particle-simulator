@@ -216,18 +216,6 @@ void DestroyParticle(Particle *particle){
     free(particle);
 }
 
-double GetDeltaTime(Uint64 *previous_time) {
-    Uint64 now = SDL_GetPerformanceCounter();
-
-    Uint64 delta_time = now - *previous_time;
-
-    double delta_time_seconds = (double)delta_time / SDL_GetPerformanceFrequency() ;
-
-    *previous_time = now;
-
-    return delta_time_seconds;
-}
-
 void Accelerate(Particle *particle, Vector acceleration) {
     particle->acceleration = Add_Vector(particle->acceleration, acceleration);
 }
@@ -340,7 +328,9 @@ void PhysicsUpdate(Particle *particle[NUMBER_OF_BALLS], Appstate *state){
         return;
     }
 
-    double delta_time = GetDeltaTime(&state->previous_time);
+    state->previous_time = SDL_GetPerformanceCounter();
+
+
     for (int i = 0; i < state->amount; ++i){
 
         if (state->create_ball && state->number_of_balls < NUMBER_OF_BALLS){
