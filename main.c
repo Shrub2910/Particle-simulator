@@ -1,3 +1,5 @@
+#include <SDL3/SDL_rect.h>
+#include <SDL3/SDL_render.h>
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
 #include <stdbool.h>
@@ -50,6 +52,7 @@ typedef struct ParticleLinkedList {
 typedef struct {
     SDL_Window *window;
     SDL_Renderer *renderer;
+    SDL_Rect viewport;
 
     // Physics objects
     Particle *particle[NUMBER_OF_BALLS];
@@ -71,6 +74,16 @@ typedef struct {
     bool can_apply_drag;
     double drag;
     bool can_change_amount;
+    bool increase_size;
+    bool decrease_size;
+    bool move_right;
+    bool move_left;
+    bool move_up;
+    bool move_down;
+    bool zoom_in;
+    double zoom_in_x;
+    bool zoom_out;
+    double zoom_in_y;
     int amount;
 } Appstate;
 
@@ -229,12 +242,12 @@ void ApplyGravity(Particle **particle, Appstate *state){
 
 void ApplyConstraint(Particle **particle, Appstate *state){
     for (int i = 0; i < state->number_of_balls; ++i){
-        Vector permiter_centre = {(double) WINDOW_X / 2,(double) WINDOW_Y / 2};
+        Vector permiter_centre = {state->permiter->x,state->permiter->y};
         Vector distance = Sub_Vector(particle[i]->current_position, permiter_centre);
 
-        if (Mag_Vector(distance) > (double) WINDOW_Y / 2 - particle[i]->size) {
+        if (Mag_Vector(distance) > state->permiter->radius - particle[i]->size) {
             Vector direction = Mul_Vector(distance, 1/(Mag_Vector(distance)));
-            particle[i]->current_position = Add_Vector(permiter_centre, Mul_Vector(direction, (double) WINDOW_Y / 2 - particle[i]->size));
+            particle[i]->current_position = Add_Vector(permiter_centre, Mul_Vector(direction, state->permiter->radius - particle[i]->size));
         }
     }
 }
@@ -264,7 +277,7 @@ void ApplyThrust(Particle **particle, Appstate *state) {
 }
 
 void ApplyBlackHole(Particle **particle, Appstate *state){
-    Vector centre = {(double) WINDOW_X / 2, (double) WINDOW_Y / 2};
+    Vector centre = {state->permiter->x, state->permiter->y};
     for (int i = 0; i < state->number_of_balls; ++i){
         Vector displacement = Sub_Vector(centre, particle[i]->current_position);
         Vector direction = Mul_Vector(displacement, 1/Mag_Vector(displacement));
@@ -376,7 +389,41 @@ void PhysicsUpdate(Particle *particle[NUMBER_OF_BALLS], Appstate *state){
 
     for (int i = 0; i < SUB_STEPS; ++i){
 
+        if (state->increase_size) {
+            state->permiter->radius += 1;
+        }
 
+        if (state->decrease_size){
+            state->permiter->radius -= 1;
+        }
+
+        if (state->move_left) {
+            state->permiter->x -= 1;
+        }
+
+        if (state->move_right) {
+            state->permiter->x += 1;
+        }
+
+        if (state->move_up) {
+            state->permiter->y -= 1;
+        }
+
+        if (state->move_down) {
+            state->permiter->y += 1;
+        }
+
+        if (state->zoom_in) {
+            state->zoom_in_x += 0.001;
+            state->zoom_in_y += 0.001;
+            SDL_SetRenderScale(state->renderer, state->zoom_in_x, state->zoom_in_y);
+        }
+
+        if (state->zoom_out) {
+            state->zoom_in_x -= 0.001;
+            state->zoom_in_y -= 0.001;
+            SDL_SetRenderScale(state->renderer, state->zoom_in_x, state->zoom_in_y);
+        }
 
         if (!state->black_hole){
             ApplyGravity(particle, state);
@@ -476,6 +523,38 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event){
 
             printf("Current Amount = %d\n", state->amount);
         }
+
+        if (event->key.scancode == SDL_SCANCODE_A){
+            state->decrease_size = true;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_D) {
+            state->increase_size = true;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_LEFT) {
+            state->move_left = true;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_RIGHT) {
+            state->move_right = true;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_UP) {
+            state->move_up = true;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_DOWN) {
+            state->move_down = true;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_Z) {
+            state->zoom_out = true;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_X) {
+            state->zoom_in = true;
+        }
     }
 
     if (event->type == SDL_EVENT_KEY_UP){
@@ -521,6 +600,39 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event){
 
         if (event->key.scancode == SDL_SCANCODE_K){
             state->can_change_amount = true;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_A){
+            state->decrease_size = false;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_D) {
+            state->increase_size = false;
+        }
+
+
+        if (event->key.scancode == SDL_SCANCODE_LEFT) {
+            state->move_left = false;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_RIGHT) {
+            state->move_right = false;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_UP) {
+            state->move_up = false;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_DOWN) {
+            state->move_down = false;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_Z) {
+            state->zoom_out = false;
+        }
+
+        if (event->key.scancode == SDL_SCANCODE_X) {
+            state->zoom_in = false;
         }
 
     }
@@ -591,6 +703,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
         SDL_Log("Failed to create renderer: %s", SDL_GetError());
     }
 
+
     Circle *permiter = (Circle*) malloc(sizeof(Circle));
 
     permiter->radius = (double) WINDOW_Y / 2;
@@ -624,6 +737,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     state->amount = 1;
 
     state->can_change_amount = true;
+
+    state->zoom_in_x = 1;
+    state->zoom_in_y = 1;
 
     Clear_Grid(state);
 
